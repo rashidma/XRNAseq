@@ -1,0 +1,33 @@
+# Nextflow runtime artifacts
+work/
+.nextflow/
+.nextflow.log
+.nextflow.log.*
+
+# Pipeline outputs (regeneratable)
+results/
+test_results/
+
+# Large binary / index files that don't belong in git
+*.bam
+*.bai
+*.cram
+*.crai
+*.sdf
+*.img
+
+# Reference genome and annotation files (download separately, see assets/README)
+assets/*.fa
+assets/*.fa.fai
+assets/*.gtf
+assets/*.vcf.gz
+assets/*.vcf.gz.tbi
+
+# Compressed archives
+files.zip
+
+# macOS metadata
+.DS_Store
+
+# Claude Code session artifacts
+.claude/

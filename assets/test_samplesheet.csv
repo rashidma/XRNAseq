@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2,condition,batch
+test_treated_1,test_data/test_treated_1_R1.fastq.gz,test_data/test_treated_1_R2.fastq.gz,treated,batch1
+test_treated_2,test_data/test_treated_2_R1.fastq.gz,test_data/test_treated_2_R2.fastq.gz,treated,batch1
+test_control_1,test_data/test_control_1_R1.fastq.gz,test_data/test_control_1_R2.fastq.gz,control,batch1
+test_control_2,test_data/test_control_2_R1.fastq.gz,test_data/test_control_2_R2.fastq.gz,control,batch1
