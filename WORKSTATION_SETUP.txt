@@ -1,0 +1,124 @@
+XRNAseq Workstation Setup & Test Run
+=====================================
+Workstation specs: 256 GB RAM, 64 CPUs, NVIDIA L40S GPU
+Run each step in order. Paste any error output back to Claude for debugging.
+
+
+STEP 1 — Check prerequisites
+------------------------------
+java -version && nextflow -version && docker --version
+
+Expected: Java 17+, Nextflow 22.10+, Docker 20+
+If any are missing, install before proceeding.
+
+
+STEP 2 — Clone the repository
+-------------------------------
+git clone https://github.com/rashidma/XRNAseq.git
+cd XRNAseq
+
+
+STEP 3 — Regenerate reference assets
+--------------------------------------
+These files are too large for git; generate them once locally.
+
+# 3a. Reference genome: chr21 only (~46 MB)
+curl -sL -o /tmp/chr21.fa.gz https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr21.fa.gz
+gunzip -c /tmp/chr21.fa.gz > assets/test_genome.fa
+samtools faidx assets/test_genome.fa
+
+# 3b. Gene annotation: chr21 features from GENCODE v44 (~16 MB)
+curl -sL -o /tmp/gencode.gtf.gz https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.annotation.gtf.gz
+gunzip -c /tmp/gencode.gtf.gz | awk -F'\t' '$1=="chr21"' > assets/test_annotation.gtf
+
+# 3c. Known variant sites for GATK BQSR (chr21 slice, downsampled 1:150)
+curl -sL -o /tmp/chr21_var.vcf.gz "https://ftp.ensembl.org/pub/release-111/variation/vcf/homo_sapiens/homo_sapiens-chr21.vcf.gz"
+{ gunzip -c /tmp/chr21_var.vcf.gz | awk '
+  /^##fileformat/ { print; print "##contig=<ID=chr21,length=46709983>"; next }
+  /^##contig/ { next }
+  /^#/ { print; next }
+  NR%150==0 { $1="chr21"; print }
+' OFS='\t'; } > /tmp/known_sites_raw.vcf
+grep "^#" /tmp/known_sites_raw.vcf > /tmp/ks_hdr.vcf
+grep -v "^#" /tmp/known_sites_raw.vcf | sort -k1,1 -k2,2n > /tmp/ks_body.vcf
+cat /tmp/ks_hdr.vcf /tmp/ks_body.vcf > assets/test_known_sites.vcf
+bgzip -f assets/test_known_sites.vcf
+tabix -p vcf assets/test_known_sites.vcf.gz
+
+# 3d. Synthetic FASTQ test reads
+python3 assets/generate_test_fastqs.py
+
+# 3e. Verify all assets are present
+ls -lh assets/test_genome.fa assets/test_genome.fa.fai assets/test_annotation.gtf \
+       assets/test_known_sites.vcf.gz assets/test_known_sites.vcf.gz.tbi
+ls -lh test_data/*.fastq.gz
+
+
+STEP 4 — Build the custom R container
+---------------------------------------
+Required for DESeq2 and fGSEA steps. Build once and it will be cached by Docker.
+
+docker build -t xrnaseq-r-analysis:1.0.0 -f containers/r_analysis/Dockerfile .
+
+Note: This pull takes a while (Bioconductor base image is ~2 GB).
+After it builds, update the container tag in two module files:
+
+  modules/deseq2.nf    — replace PLACEHOLDER_VERIFY_AT_IMPLEMENTATION:xrnaseq-r-analysis
+  modules/gsea_fgsea.nf — replace PLACEHOLDER_VERIFY_AT_IMPLEMENTATION:xrnaseq-r-analysis
+
+with:
+
+  xrnaseq-r-analysis:1.0.0
+
+
+STEP 5 — Run the test profile
+-------------------------------
+nextflow run main.nf -profile docker,test 2>&1 | tee nextflow_test.log
+
+This runs the full backbone (FastQC → Trim Galore → STAR 2-pass → featureCounts →
+DESeq2 → fGSEA → MultiQC) on the synthetic chr21 test data.
+Variant calling, fusion, and splicing are OFF in the test profile
+(they need real cohort data to produce meaningful results).
+
+Expected runtime: 15-40 minutes depending on Docker pull time for first run.
+Expected output directory: results/
+
+
+STEP 6 — Check outputs
+------------------------
+ls -lh results/
+ls -lh results/fastqc/
+ls -lh results/deseq2/
+ls -lh results/multiqc/
+cat results/deseq2/deseq2_results.tsv | head -20
+
+
+STEP 7 — (Optional) Resume after crash
+----------------------------------------
+If the run fails partway, fix the issue and resume from the last successful step:
+
+nextflow run main.nf -profile docker,test -resume 2>&1 | tee nextflow_test_resume.log
+
+
+TROUBLESHOOTING
+----------------
+- Container pull fails    -> check Docker daemon is running: docker ps
+- STAR index step fails   -> check assets/test_genome.fa exists and is non-empty
+- DESeq2/fGSEA fails      -> confirm Step 4 (R container build) completed successfully
+- Permission errors        -> run: chmod +x bin/run_deseq2.R bin/run_fgsea.R
+- Out of memory in STAR   -> edit conf/test.config, reduce --genomeSAindexNbases or
+                             increase STAR_INDEX memory label in conf/base.config
+- Any other error         -> paste the error + contents of nextflow_test.log to Claude
+
+
+NEXT STEPS AFTER SUCCESSFUL TEST
+----------------------------------
+1. Point params to your real KAIMRC cohort samplesheet and full GRCh38 references
+2. Fill in the TODO placeholders in conf/slurm.config (partition, account, singularity cache)
+3. Run on KAIMRC Slurm:
+   nextflow run main.nf \
+     --samplesheet /path/to/cohort_samplesheet.csv \
+     --genome_fasta /ref/GRCh38.primary_assembly.fa \
+     --gtf /ref/gencode.v44.annotation.gtf \
+     --outdir results_cohort \
+     -profile singularity,slurm
