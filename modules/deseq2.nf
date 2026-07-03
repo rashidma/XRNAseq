@@ -5,7 +5,7 @@ process DESEQ2 {
     // Custom image -- build containers/r_analysis/Dockerfile and push it
     // somewhere you control, then set this to your own tag, e.g.:
     //   container 'ghcr.io/<you>/xrnaseq-r-analysis:1.0.0'
-    container 'PLACEHOLDER_VERIFY_AT_IMPLEMENTATION:xrnaseq-r-analysis'
+    container 'xrnaseq-r-analysis:1.0.0'
     label 'process_medium'
 
     input:

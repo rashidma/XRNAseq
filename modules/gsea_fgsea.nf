@@ -3,7 +3,7 @@ process GSEA_FGSEA {
     publishDir "${params.outdir}/gsea", mode: 'copy'
 
     // Same custom image as modules/deseq2.nf -- see that file's container note.
-    container 'PLACEHOLDER_VERIFY_AT_IMPLEMENTATION:xrnaseq-r-analysis'
+    container 'xrnaseq-r-analysis:1.0.0'
     label 'process_low'
 
     input:

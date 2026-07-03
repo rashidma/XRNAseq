@@ -89,7 +89,14 @@ res_df %>%
     write_tsv(file.path(opt$outdir, "ranked_genes.rnk"), col_names = FALSE)
 
 # --- Plots ---
-vsd <- vst(dds, blind = TRUE)
+# vst() subsamples ~1000 rows to fit the dispersion trend and errors out below
+# that; varianceStabilizingTransformation() fits on all rows instead, which is
+# DESeq2's own documented fallback for small gene counts (e.g. a chr21-only
+# test run or a small targeted panel).
+vsd <- tryCatch(
+    vst(dds, blind = TRUE),
+    error = function(e) varianceStabilizingTransformation(dds, blind = TRUE)
+)
 pca_data <- plotPCA(vsd, intgroup = contrast_column, returnData = TRUE)
 pca_plot <- ggplot(pca_data, aes(PC1, PC2, color = .data[[contrast_column]])) +
     geom_point(size = 3) +

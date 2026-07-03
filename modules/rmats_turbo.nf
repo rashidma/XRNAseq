@@ -25,7 +25,7 @@ process RMATS_TURBO {
     script:
     """
     mkdir -p rmats_tmp
-    rmats.py \\
+    python3 /rmats/rmats.py \\
         --b1 ${b1_txt} --b2 ${b2_txt} \\
         --gtf ${gtf} \\
         --od rmats_out --tmp rmats_tmp \\
